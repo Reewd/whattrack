@@ -1,6 +1,8 @@
+from model.model import LitContrastive
+
 def main():
-    print("Hello from whattrack!")
-
-
+    model = LitContrastive()
+    print(model)
+    
 if __name__ == "__main__":
     main()

@@ -1,0 +1,71 @@
+_wandb:
+    value:
+        cli_version: 0.23.1
+        e:
+            xc2in35ix5dofxhewnind3618uqy33bm:
+                codePath: main.py
+                codePathLocal: main.py
+                cpu_count: 8
+                cpu_count_logical: 16
+                cudaVersion: "13.0"
+                disk:
+                    /:
+                        total: "479692349440"
+                        used: "313626112000"
+                email: andrea@avenditti.com
+                executable: /home/andrea/whattrack/.venv/bin/python3
+                git:
+                    commit: d6bbbfeeccf3a8d47b6bad82ba2549c0ca271d65
+                    remote: git@github.com:Reewd/whattrack.git
+                gpu: NVIDIA GeForce GTX 1080 Ti
+                gpu_count: 1
+                gpu_nvidia:
+                    - architecture: Pascal
+                      cudaCores: 3584
+                      memoryTotal: "11811160064"
+                      name: NVIDIA GeForce GTX 1080 Ti
+                      uuid: GPU-08cbf5ee-0303-d468-b40d-4b7a21f4f231
+                host: andrea-linux
+                memory:
+                    total: "33574719488"
+                os: Linux-6.12.61-1-lts-x86_64-with-glibc2.42
+                program: /home/andrea/whattrack/./main.py
+                python: CPython 3.10.19
+                root: .
+                startedAt: "2025-12-13T17:33:56.046724Z"
+                writerId: xc2in35ix5dofxhewnind3618uqy33bm
+        m:
+            - "1": trainer/global_step
+              "6":
+                - 3
+              "7": []
+            - "2": '*'
+              "5": 1
+              "6":
+                - 1
+              "7": []
+        python_version: 3.10.19
+        t:
+            "1":
+                - 1
+                - 9
+                - 103
+                - 106
+            "2":
+                - 1
+                - 9
+                - 103
+                - 106
+            "3":
+                - 7
+                - 66
+            "4": 3.10.19
+            "5": 0.23.1
+            "12": 0.23.1
+            "13": linux-x86_64
+embed_dim:
+    value: 512
+lr:
+    value: 0.001
+temperature:
+    value: 0.1

@@ -1,0 +1,40 @@
+{
+  "os":  "Linux-6.12.61-1-lts-x86_64-with-glibc2.42",
+  "python":  "CPython 3.10.19",
+  "startedAt":  "2025-12-13T17:33:56.046724Z",
+  "program":  "/home/andrea/whattrack/./main.py",
+  "codePath":  "main.py",
+  "codePathLocal":  "main.py",
+  "git":  {
+    "remote":  "git@github.com:Reewd/whattrack.git",
+    "commit":  "d6bbbfeeccf3a8d47b6bad82ba2549c0ca271d65"
+  },
+  "email":  "andrea@avenditti.com",
+  "root":  ".",
+  "host":  "andrea-linux",
+  "executable":  "/home/andrea/whattrack/.venv/bin/python3",
+  "cpu_count":  8,
+  "cpu_count_logical":  16,
+  "gpu":  "NVIDIA GeForce GTX 1080 Ti",
+  "gpu_count":  1,
+  "disk":  {
+    "/":  {
+      "total":  "479692349440",
+      "used":  "313626112000"
+    }
+  },
+  "memory":  {
+    "total":  "33574719488"
+  },
+  "gpu_nvidia":  [
+    {
+      "name":  "NVIDIA GeForce GTX 1080 Ti",
+      "memoryTotal":  "11811160064",
+      "cudaCores":  3584,
+      "architecture":  "Pascal",
+      "uuid":  "GPU-08cbf5ee-0303-d468-b40d-4b7a21f4f231"
+    }
+  ],
+  "cudaVersion":  "13.0",
+  "writerId":  "xc2in35ix5dofxhewnind3618uqy33bm"
+}

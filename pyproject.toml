@@ -8,9 +8,11 @@ dependencies = [
     "flameprof>=0.4",
     "lightning>=2.6.0",
     "py-spy>=0.4.1",
+    "soundfile>=0.13.1",
     "torch>=2.8.0",
     "torchaudio==2.8.0",
     "torchcodec>=0.9.1",
+    "wandb>=0.23.1",
 ]
 
 [tool.uv.sources]

@@ -9,4 +9,4 @@
 #SBATCH --error=logs_out/%x-%j.err
 #SBATCH --time=1-00:00:00
 
-uv run main.py
+srun uv run main.py

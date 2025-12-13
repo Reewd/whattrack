@@ -8,6 +8,8 @@ from audio import AudioAugmentations
 import torchaudio
 from typing import Tuple
 import numpy as np
+import torchaudio.transforms as T
+
 
 class AbstractAudioDataset(Dataset, ABC):
     @abstractmethod
@@ -186,29 +188,34 @@ class AudioDataset(AbstractAudioDataset):
 
 
 def collate_fn(batch):
-    """
-    Custom collate function to handle anchor-positive pairs.
-    
-    Input: List of (anchor, positives) tuples
-    Output: (anchors_batch, positives_batch)
-        anchors_batch: (batch_size, 1, n_samples)
-        positives_batch: (batch_size * n_pos, 1, n_samples)
-    """
+    """Convert waveforms to spectrograms."""
     anchors = []
     positives = []
     
-    for anchor, pos in batch:
-        anchors.append(anchor)
-        if len(pos) > 0:
-            positives.extend(pos)
+    # Create spectrogram transform
+    spec_transform = T.MelSpectrogram(
+        sample_rate=8000,
+        n_fft=1024,
+        hop_length=512,
+        n_mels=128
+    )
     
-    # Stack and add channel dimension
-    anchors_batch = torch.stack(anchors).unsqueeze(1)  # (batch_size, 1, n_samples)
+    for anchor, pos in batch:
+        # Convert to spectrogram and take log
+        anchor_spec = torch.log(spec_transform(anchor) + 1e-9)
+        anchors.append(anchor_spec)
+        
+        if len(pos) > 0:
+            for p in pos:
+                pos_spec = torch.log(spec_transform(p) + 1e-9)
+                positives.append(pos_spec)
+    
+    anchors_batch = torch.stack(anchors).unsqueeze(1)  # (batch, 1, freq, time)
     
     if len(positives) > 0:
-        positives_batch = torch.stack(positives).unsqueeze(1)  # (batch_size*n_pos, 1, n_samples)
+        positives_batch = torch.stack(positives).unsqueeze(1)
     else:
-        positives_batch = torch.empty(0, 1, anchors_batch.shape[2])
+        positives_batch = torch.empty(0, 1, anchors_batch.shape[2], anchors_batch.shape[3])
     
     return anchors_batch, positives_batch
 

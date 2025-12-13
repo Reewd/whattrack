@@ -9,7 +9,8 @@ def main():
     model = LitContrastive()
     dm = AudioDataModule(train_path=train_path, val_path=val_path, test_path=test_path)
     trainer = L.Trainer(max_epochs=10)
-    trainer.fit(model, dm)
+    dm.setup()
+    trainer.fit(model=model, train_dataloaders=dm.train_dataloader(), val_dataloaders=dm.val_dataloader())
     
     
 if __name__ == "__main__":

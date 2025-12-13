@@ -6,6 +6,7 @@ from audio.augmentations.ir_noise_mixing import ImpulseResponseAugmentation
 import lightning as L
 from pytorch_lightning.loggers import WandbLogger
 from lightning.pytorch.tuner import Tuner
+from lightning.pytorch.callbacks import ModelCheckpoint, DeviceStatsMonitor
 
 def main():
     train_path = "dataset/music/train-10k-30s"
@@ -32,7 +33,21 @@ def main():
 )
 
     dm = AudioDataModule(train_path=train_path, val_path=val_path, test_path=test_path, num_workers=32, train_augmentations=augmentations, batch_size=300)
-    trainer = L.Trainer(max_epochs=5, logger=wandb_logger)
+    
+    # Configure checkpoint callback to save best model based on lowest loss
+    checkpoint_callback = ModelCheckpoint(
+        monitor='train_loss',
+        dirpath='checkpoints',
+        filename='best-model-{epoch:02d}-{train_loss:.4f}',
+        save_top_k=1,
+        mode='min',
+        save_last=True
+    )
+    
+    # Monitor GPU usage metrics
+    device_stats = DeviceStatsMonitor()
+    
+    trainer = L.Trainer(max_epochs=5, logger=wandb_logger, callbacks=[checkpoint_callback, device_stats])
     dm.setup()
     trainer.fit(model=model, train_dataloaders=dm.train_dataloader(), val_dataloaders=dm.val_dataloader())
     

@@ -209,4 +209,5 @@ __marimo__/
 *.lock
 dataset/
 dataset
+prof/
 *.wav

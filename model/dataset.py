@@ -321,7 +321,7 @@ class AudioDataModule(pl.LightningDataModule):
 
 
 if __name__ == "__main__":
-    
+    import time
     dataset_dir = "/home/francescodb/Documenti/Uni/FDS/Final Project/whattrack/dataset/neural-audio-fp-dataset/music/train-10k-30s/fma_small_8k_plus_medium_2k"
     aug_dir = "/home/francescodb/Documenti/Uni/FDS/Final Project/whattrack/dataset/neural-audio-fp-dataset/aug"
     from audio.augmentations import BackgroundNoiseMixing, ImpulseResponseAugmentation
@@ -361,8 +361,14 @@ if __name__ == "__main__":
         print(f"  Positives shape: {positives.shape}")
     
     # Test dataloader
-    print(f"\nTesting DataLoader:")
+    print(f"Loading DataLoader:")
     dataloader = DataLoader(dataset, batch_size=60, shuffle=True, collate_fn=collate_fn, num_workers=12, persistent_workers=True, pin_memory=True)
-    anchors_batch, positives_batch = next(iter(dataloader))
-    print(f"Anchors batch shape: {anchors_batch.shape}")  # (60, 1, 8000)
-    print(f"Positives batch shape: {positives_batch.shape}")  # (60, 1, 8000)
+    print(f"Testing DataLoader:")
+
+    old = time.time()
+    for anchors_batch, positives_batch in dataloader:
+        print(f"Anchors batch shape: {anchors_batch.shape}")  # (60, 1, 8000)
+        print(f"Positives batch shape: {positives_batch.shape}")  # (60, 1, 8000)
+        new = time.time()
+        print(f"Batch time: {new - old:.3f} seconds")
+        old = new

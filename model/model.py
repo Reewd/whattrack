@@ -91,5 +91,15 @@ class LitContrastive(L.LightningModule):
         self.log("train_loss", loss, prog_bar=True)
         return loss
 
+    def validation_step(self, batch, batch_idx):
+        x_clean, x_aug = batch
+        z_clean = F.normalize(self(x_clean), dim=1)
+        z_aug = F.normalize(self(x_aug), dim=1)
+        
+        # Positive similarity
+        pos_sim = (z_clean * z_aug).sum(dim=1).mean()
+        self.log("val_pos_sim", pos_sim, prog_bar=True)
+        return pos_sim
+
     def configure_optimizers(self):
         return optim.Adam(self.parameters(), lr=self.lr)

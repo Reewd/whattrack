@@ -8,8 +8,9 @@ from pytorch_lightning.loggers import WandbLogger
 from lightning.pytorch.callbacks import ModelCheckpoint, DeviceStatsMonitor
 import argparse
 import torch
+import warnings
 
-def main():
+def parse_args():
     argparser = argparse.ArgumentParser()
     argparser.add_argument('--resume_from_checkpoint', type=str, default=None, help='Path to checkpoint to resume from')
     argparser.add_argument('--train-path', type=str, default='dataset/music/train-10k-30s', help='Path to training dataset')
@@ -20,18 +21,31 @@ def main():
     argparser.add_argument('--num-workers', type=int, default=32, help='Number of workers for data loading')
     argparser.add_argument('--max-epochs', type=int, default=5, help='Maximum number of training epochs')
     argparser.add_argument('--faster-h100', action='store_true', help='Use faster H100 optimizations')
+    argparser.add_argument('--suppress-warnings', action='store_true', help='Suppress warnings during training')
+    argparser.add_argument('--lr', type=float, default=1e-3, help='Learning rate for the optimizer')
+    argparser.add_argument('--run-name', type=str, default=None, help='WandB run name')
     args = argparser.parse_args()
 
     if args.faster_h100:
         print("Using faster H100 optimizations")
         torch.set_float32_matmul_precision('high')
 
+    if args.suppress_warnings:
+        print("Suppressing warnings")
+        warnings.filterwarnings("ignore")
+
+    return args
+
+def main():
+    args = parse_args()
+
     train_path = args.train_path
     val_path = args.val_path
     test_path = args.test_path
     aug_dir = args.aug_dir
-    wandb_logger = WandbLogger(project="FDS")
-    model = LitContrastive()
+
+    wandb_logger = WandbLogger(project="FDS", name=args.run_name)
+    model = LitContrastive(lr=args.lr)
 
     augmentations = AudioAugmentations(
     enabled_augmentations=[
@@ -53,9 +67,9 @@ def main():
     
     # Configure checkpoint callback to save best model based on lowest loss
     checkpoint_callback = ModelCheckpoint(
-        monitor='train_loss',
+        monitor='val_pos_sim',
         dirpath='checkpoints',
-        filename='best-model-{epoch:02d}-{train_loss:.4f}',
+        filename='best-model-{epoch:02d}-{train_loss:.4f}-{val_pos_sim:.4f}',
         save_top_k=1,
         mode='min',
         save_last=True

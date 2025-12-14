@@ -2,65 +2,68 @@ import torch
 from torch import nn, utils, optim, Tensor
 import torch.nn.functional as F
 import lightning as L
+import math
 
-
-class ResBlock(nn.Module):
-    def __init__(self, in_channels: int, out_channels: int, stride: int = 1):
-        super().__init__()
-        self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1, stride=stride)
-        self.bn1 = nn.BatchNorm2d(out_channels)
-        self.relu = nn.ReLU(inplace=True)
-        self.conv2 = nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1, stride=1)
-        self.bn2 = nn.BatchNorm2d(out_channels)
-        self.shortcut = nn.Sequential()
-        if in_channels != out_channels or stride != 1:
-            self.shortcut = nn.Sequential(
-                nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=stride),
-                nn.BatchNorm2d(out_channels)
-            )
-
-    def forward(self, x: Tensor) -> Tensor:
-        out = self.conv1(x)
-        out = self.bn1(out)
-        out = self.relu(out)
-        out = self.conv2(out)
-        out = self.bn2(out)
-        out += self.shortcut(x)
-        out = self.relu(out)
-        return out
 
 class Model(nn.Module):
-    def __init__(self, embed_dim: int = 512):
+    def __init__(self, embed_dim: int = 512, patch_size: int = 8, num_heads: int = 8, num_layers: int = 6, hidden_dim: int = 2048):
         super().__init__()
-        self.in_channels = 64
-        self.conv1 = nn.Conv2d(1, 64, kernel_size=3, stride=1, padding=1, bias=False)
-        self.bn1 = nn.BatchNorm2d(64)
-        self.relu = nn.ReLU(inplace=True)
-        self.layer1 = self._make_layer(64, blocks=2, stride=1)
-        self.layer2 = self._make_layer(128, blocks=2, stride=2)
-        self.layer3 = self._make_layer(256, blocks=2, stride=2)
-        self.layer4 = self._make_layer(512, blocks=2, stride=2)
-        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        self.multihead = nn.MultiheadAttention(embed_dim=512, num_heads=8, batch_first=True)
-        self.fc = nn.Linear(512, embed_dim)
-
-    def _make_layer(self, out_channels: int, blocks: int, stride: int):
-        layers = [ResBlock(self.in_channels, out_channels, stride)]
-        self.in_channels = out_channels
-        for _ in range(1, blocks):
-            layers.append(ResBlock(out_channels, out_channels, 1))
-        return nn.Sequential(*layers)
+        self.patch_size = patch_size
+        self.embed_dim = embed_dim
+        
+        # Patch embedding: convert image patches to embeddings
+        self.patch_embed = nn.Conv2d(1, embed_dim, kernel_size=patch_size, stride=patch_size)
+        
+        # Positional encoding (learnable)
+        self.pos_encoding = nn.Parameter(torch.randn(1, 1000, embed_dim))  # max 1000 patches
+        
+        # Transformer encoder
+        encoder_layer = nn.TransformerEncoderLayer(
+            d_model=embed_dim,
+            nhead=num_heads,
+            dim_feedforward=hidden_dim,
+            dropout=0.1,
+            activation='gelu',
+            batch_first=True,
+            norm_first=True
+        )
+        self.transformer = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
+        
+        # Classification token
+        self.cls_token = nn.Parameter(torch.randn(1, 1, embed_dim))
+        
+        # Output projection
+        self.norm = nn.LayerNorm(embed_dim)
+        self.head = nn.Linear(embed_dim, embed_dim)
 
     def forward(self, x: Tensor) -> Tensor:
-        x = self.relu(self.bn1(self.conv1(x)))
-        x = self.layer1(x)
-        x = self.layer2(x)
-        x = self.layer3(x)
-        x = self.layer4(x)               # (N, 512, H', W')
-        seq = x.flatten(2).transpose(1, 2)          # (N, L, 512)
-        seq, _ = self.multihead(seq, seq, seq)      # (N, L, 512)
-        x = seq.mean(dim=1)                         # (N, 512)
-        x = self.fc(x)                              # (N, embed_dim)
+        # x: (N, 1, H, W) - input spectrogram
+        N = x.shape[0]
+        
+        # Patch embedding: (N, 1, H, W) -> (N, embed_dim, H/P, W/P)
+        x = self.patch_embed(x)  # (N, embed_dim, n_patches_h, n_patches_w)
+        
+        # Flatten patches: (N, embed_dim, n_patches_h, n_patches_w) -> (N, n_patches, embed_dim)
+        x = x.flatten(2).transpose(1, 2)  # (N, n_patches, embed_dim)
+        
+        # Add positional encoding
+        n_patches = x.shape[1]
+        x = x + self.pos_encoding[:, :n_patches, :]
+        
+        # Prepend CLS token
+        cls_tokens = self.cls_token.expand(N, -1, -1)  # (N, 1, embed_dim)
+        x = torch.cat([cls_tokens, x], dim=1)  # (N, 1+n_patches, embed_dim)
+        
+        # Transformer encoder
+        x = self.transformer(x)  # (N, 1+n_patches, embed_dim)
+        
+        # Extract CLS token embedding
+        x = x[:, 0]  # (N, embed_dim)
+        
+        # Final projection
+        x = self.norm(x)
+        x = self.head(x)  # (N, embed_dim)
+        
         return x
 
 class LitContrastive(L.LightningModule):

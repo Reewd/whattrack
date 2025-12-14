@@ -1,7 +1,7 @@
 from model.model import LitContrastive
 from model.dataset import AudioDataModule
 from audio.augmentation import AudioAugmentations
-from audio.augmentations import PitchJitterAugmentation, TempoJitterAugmentation, BackgroundNoiseMixing, ImpulseResponseAugmentation
+from audio.augmentations import *
 import lightning as L
 from pytorch_lightning.loggers import WandbLogger
 from lightning.pytorch.callbacks import ModelCheckpoint, DeviceStatsMonitor, LearningRateMonitor
@@ -60,16 +60,26 @@ def main():
                 train=True,
                 sample_rate=8000
             ),
-            #PitchJitterAugmentation(
-            #    steps_range=(-1, 1),
-            #    sample_rate=8000,
-            #    train=True
-            #),
-            #TempoJitterAugmentation(
-            #    factor_range=(0.8, 1.2),
-            #    sample_rate=8000,
-            #    train=True
-            #)
+            PitchJitterAugmentation(
+                steps_range=(-1, 1),
+                sample_rate=8000,
+                train=True
+            ),
+            VolumeAugmentation(
+                gain_range=(-6.0, 6.0),
+                scale_range=(0.5, 1.5),
+                clipping=True,
+                sample_rate=8000,
+                train=True
+            ),
+            ReverbAugmentation(
+                reverb_amount=(30, 60),
+                room_scale=(30, 80),
+                damping=(30, 70),
+                wet_dry_mix=(20, 50),
+                sample_rate=8000,
+                train=True
+            ),
         ]
     )
 

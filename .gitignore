@@ -212,3 +212,6 @@ dataset
 prof/
 *.wav
 logs_out/
+weights/
+fma_metadata/
+fma_small/

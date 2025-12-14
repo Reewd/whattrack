@@ -216,7 +216,6 @@ def collate_fn(batch):
     
     return anchors_batch, positives_batch
 
-
 class AudioDataModule(pl.LightningDataModule):
     def __init__(
         self, 
@@ -327,6 +326,7 @@ class AudioDataModule(pl.LightningDataModule):
                 prefetch_factor=self.prefetch_factor if self.num_workers > 0 else None
             )
         return None
+
 
 
 if __name__ == "__main__":

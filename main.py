@@ -23,7 +23,7 @@ def main():
     train_path = args.train_path
     val_path = args.val_path
     test_path = args.test_path
-    aug_dir = "dataset/aug"
+    aug_dir = args.aug_dir
     wandb_logger = WandbLogger(project="FDS")
     model = LitContrastive()
 

@@ -9,7 +9,7 @@ import torchaudio
 from typing import Tuple
 import numpy as np
 import torchaudio.transforms as T
-
+from functools import lru_cache
 
 class AbstractAudioDataset(Dataset, ABC):
     @abstractmethod
@@ -51,6 +51,7 @@ class AudioDataset(AbstractAudioDataset):
         self.offset_margin_ratio = offset_margin_ratio
         self.train = train
         self.augmentations = augmentations
+        self.audio_infos = []
         
         # Collect audio files
         self.audio_files = []
@@ -77,7 +78,8 @@ class AudioDataset(AbstractAudioDataset):
         
         for audio_file in self.audio_files:
             # Get audio length
-            info = torchaudio.info(audio_file) # type: ignore
+            info = self._get_audio_info(audio_file)
+            # self.audio_infos.append(info)
             n_frames = info.num_frames
             
             # Calculate number of segments
@@ -100,6 +102,11 @@ class AudioDataset(AbstractAudioDataset):
     
     def __len__(self):
         return len(self.segments)
+    
+    @lru_cache(maxsize=1024)
+    def _get_audio_info(self, file_path: Path):
+        """Cache audio info to avoid repeated disk access."""
+        return torchaudio.info(file_path)  # type: ignore
     
     def __getitem__(self, idx) -> Tuple[torch.Tensor, torch.Tensor]:
         """
@@ -161,30 +168,31 @@ class AudioDataset(AbstractAudioDataset):
     def _load_audio_segment(self, file_path: Path, start_sample: int, n_samples: int) -> torch.Tensor:
         """Load a specific segment from audio file."""
         # Load audio
-        waveform, sr = torchaudio.load(file_path)
+        info = self._get_audio_info(file_path)
+        total_frames = info.num_frames
+
+        actual_start = max(0, start_sample)
+        actual_end = min(start_sample + n_samples, total_frames)
+        frames_to_load = actual_end - actual_start
+
+        waveform, sr = torchaudio.load(
+            file_path, 
+            frame_offset=actual_start, 
+            num_frames=frames_to_load
+        
+        )
         assert sr == self.sample_rate, f"Sample rate mismatch: expected {self.sample_rate}, got {sr}"
         
         # Convert to mono if stereo
         if waveform.shape[0] > 1:
             waveform = waveform.mean(dim=0, keepdim=True)
         
-        # Extract segment
-        end_sample = start_sample + n_samples
-        
-        # Handle boundary conditions
-        if start_sample < 0:
-            start_sample = 0
-        if end_sample > waveform.shape[1]:
-            end_sample = waveform.shape[1]
-        
-        segment = waveform[:, start_sample:end_sample]
-        
-        # Pad if necessary
-        if segment.shape[1] < n_samples:
-            padding = n_samples - segment.shape[1]
+        segment = waveform.squeeze(0)
+        if segment.shape[0] < n_samples:
+            padding = n_samples - segment.shape[0]
             segment = torch.nn.functional.pad(segment, (0, padding))
         
-        return segment.squeeze(0)  # Return (n_samples,)
+        return segment
 
 
 def collate_fn(batch):

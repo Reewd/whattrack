@@ -64,6 +64,7 @@ def main():
     ]
 )
 
+    print("Setting up data module...")
     dm = AudioDataModule(
         train_path=train_path, 
         val_path=val_path, 
@@ -90,6 +91,7 @@ def main():
     # Monitor GPU usage metrics
     device_stats = DeviceStatsMonitor()
     
+    print("Starting training...")
     trainer = L.Trainer(max_epochs=args.max_epochs, logger=wandb_logger, callbacks=[checkpoint_callback, device_stats, lr_callback]) # type: ignore
     dm.setup()
     trainer.fit(model=model, train_dataloaders=dm.train_dataloader(), val_dataloaders=dm.val_dataloader())

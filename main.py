@@ -65,11 +65,11 @@ def main():
                 sample_rate=8000,
                 train=True
             ),
-            TempoJitterAugmentation(
-                factor_range=(0.8, 1.2),
-                sample_rate=8000,
-                train=True
-            )
+            #TempoJitterAugmentation(
+            #    factor_range=(0.8, 1.2),
+            #    sample_rate=8000,
+            #    train=True
+            #)
         ]
     )
 

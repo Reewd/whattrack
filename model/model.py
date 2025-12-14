@@ -89,7 +89,7 @@ class LitContrastive(L.LightningModule):
     def forward(self, x):
         return self.encoder(x)
 
-    def training_step(self, batch, batch_idx):
+    def _common_step(self, batch, batch_idx, mode="train"):
         x_clean, x_aug = batch
         z_clean = F.normalize(self(x_clean), dim=1)
         z_aug = F.normalize(self(x_aug), dim=1)
@@ -103,18 +103,33 @@ class LitContrastive(L.LightningModule):
         targets = torch.cat([torch.arange(N, 2 * N, device=z.device),
                              torch.arange(0, N, device=z.device)], dim=0)
         loss = F.cross_entropy(sim, targets)
-        self.log("train_loss", loss, prog_bar=True)
+        self.log(f"{mode}_loss", loss, prog_bar=True)
         return loss
 
+    def training_step(self, batch, batch_idx):
+        return self._common_step(batch, batch_idx, mode="train")
+
     def validation_step(self, batch, batch_idx):
+        self._common_step(batch, batch_idx, mode="val")
+
         x_clean, x_aug = batch
         z_clean = F.normalize(self(x_clean), dim=1)
         z_aug = F.normalize(self(x_aug), dim=1)
-        
-        # Positive similarity
-        pos_sim = (z_clean * z_aug).sum(dim=1).mean()
-        self.log("val_pos_sim", pos_sim, prog_bar=True)
-        return pos_sim
+
+        alignment = (z_clean - z_aug).norm(p=2, dim=1).pow(2).mean()
+
+        z_all = torch.cat([z_clean, z_aug], dim=0)
+
+        sq_pdist = torch.pdist(z_all, p=2).pow(2)
+        uniformity = sq_pdist.mul(-2).exp().mean().log()
+
+        self.log_dict({
+            "val_alignment": alignment,
+            "val_uniformity": uniformity,
+            "val_pos_sim": F.cosine_similarity(z_clean, z_aug).mean()
+        }, prog_bar=True, sync_dist=True)
+
+        return alignment
 
     def configure_optimizers(self): # type: ignore
         optimizer = optim.AdamW(self.parameters(), lr=self.lr)

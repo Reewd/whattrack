@@ -60,11 +60,11 @@ def main():
                 train=True,
                 sample_rate=8000
             ),
-            PitchJitterAugmentation(
-                steps_range=(-1, 1),
-                sample_rate=8000,
-                train=True
-            ),
+            #PitchJitterAugmentation(
+            #    steps_range=(-1, 1),
+            #    sample_rate=8000,
+            #    train=True
+            #),
             #TempoJitterAugmentation(
             #    factor_range=(0.8, 1.2),
             #    sample_rate=8000,

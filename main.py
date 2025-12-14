@@ -5,7 +5,7 @@ from audio.augmentations.background_noise_mixing import BackgroundNoiseMixing
 from audio.augmentations.ir_noise_mixing import ImpulseResponseAugmentation
 import lightning as L
 from pytorch_lightning.loggers import WandbLogger
-from lightning.pytorch.callbacks import ModelCheckpoint, DeviceStatsMonitor
+from lightning.pytorch.callbacks import ModelCheckpoint, DeviceStatsMonitor, LearningRateMonitor
 import argparse
 import torch
 import warnings
@@ -74,11 +74,13 @@ def main():
         mode='min',
         save_last=True
     )
+
+    lr_callback = LearningRateMonitor(logging_interval='step')
     
     # Monitor GPU usage metrics
     device_stats = DeviceStatsMonitor()
     
-    trainer = L.Trainer(max_epochs=args.max_epochs, logger=wandb_logger, callbacks=[checkpoint_callback, device_stats]) # type: ignore
+    trainer = L.Trainer(max_epochs=args.max_epochs, logger=wandb_logger, callbacks=[checkpoint_callback, device_stats, lr_callback]) # type: ignore
     dm.setup()
     trainer.fit(model=model, train_dataloaders=dm.train_dataloader(), val_dataloaders=dm.val_dataloader())
     

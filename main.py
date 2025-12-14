@@ -1,8 +1,7 @@
 from model.model import LitContrastive
 from model.dataset import AudioDataModule
 from audio.augmentation import AudioAugmentations
-from audio.augmentations.background_noise_mixing import BackgroundNoiseMixing
-from audio.augmentations.ir_noise_mixing import ImpulseResponseAugmentation
+from audio.augmentations import PitchJitterAugmentation, TempoJitterAugmentation, BackgroundNoiseMixing, ImpulseResponseAugmentation
 import lightning as L
 from pytorch_lightning.loggers import WandbLogger
 from lightning.pytorch.callbacks import ModelCheckpoint, DeviceStatsMonitor, LearningRateMonitor
@@ -49,20 +48,30 @@ def main():
     model = LitContrastive(lr=args.lr)
 
     augmentations = AudioAugmentations(
-    enabled_augmentations=[
-        BackgroundNoiseMixing(
-            files_path=f"{aug_dir}/bg",
-            train=True,
-            snr_range=(0, 10),
-            sample_rate=8000
-        ),
-        ImpulseResponseAugmentation(
-            ir_path=f"{aug_dir}/ir",
-            train=True,
-            sample_rate=8000
-        )
-    ]
-)
+        enabled_augmentations=[
+            BackgroundNoiseMixing(
+                files_path=f"{aug_dir}/bg",
+                train=True,
+                snr_range=(0, 10),
+                sample_rate=8000
+            ),
+            ImpulseResponseAugmentation(
+                ir_path=f"{aug_dir}/ir",
+                train=True,
+                sample_rate=8000
+            ),
+            PitchJitterAugmentation(
+                steps_range=(-1, 1),
+                sample_rate=8000,
+                train=True
+            ),
+            TempoJitterAugmentation(
+                factor_range=(0.8, 1.2),
+                sample_rate=8000,
+                train=True
+            )
+        ]
+    )
 
     print("Setting up data module...")
     dm = AudioDataModule(
@@ -73,14 +82,17 @@ def main():
         train_augmentations=augmentations, 
         batch_size=args.batch_size, 
         val_augmentations=augmentations,
-        prefetch_factor=args.prefetch_factor
+        prefetch_factor=args.prefetch_factor,
+        sample_duration_s=2,
+        # hop_duration_s=1
     )
     
     # Configure checkpoint callback to save best model based on lowest loss
+    run_name = args.run_name if args.run_name is not None else "default_run"
     checkpoint_callback = ModelCheckpoint(
         monitor='val_pos_sim',
         dirpath='checkpoints',
-        filename='best-model-{epoch:02d}-{train_loss:.4f}-{val_pos_sim:.4f}',
+        filename= run_name + '-best-model-{epoch:02d}-{train_loss:.4f}-{val_pos_sim:.4f}',
         save_top_k=1,
         mode='max',
         save_last=True

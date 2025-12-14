@@ -83,7 +83,7 @@ class LitContrastive(L.LightningModule):
         super().__init__()
         self.save_hyperparameters()
         self.encoder = Model(embed_dim=embed_dim)
-        self.temperature = temperature
+        self.temperature = nn.Parameter(torch.tensor(temperature))
         self.lr = lr
 
     def forward(self, x):

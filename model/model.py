@@ -1,5 +1,7 @@
 import torch
 from torch import nn, utils, optim, Tensor
+from torch.optim.lr_scheduler import CosineAnnealingLR
+import pytorch_warmup as warmup
 import torch.nn.functional as F
 import lightning as L
 import math
@@ -104,5 +106,30 @@ class LitContrastive(L.LightningModule):
         self.log("val_pos_sim", pos_sim, prog_bar=True)
         return pos_sim
 
-    def configure_optimizers(self):
-        return optim.Adam(self.parameters(), lr=self.lr)
+    def configure_optimizers(self): # type: ignore
+        optimizer = optim.AdamW(self.parameters(), lr=self.lr)
+
+        total_steps = self.trainer.estimated_stepping_batches
+        warmup_steps = int(0.1 * total_steps)
+
+        warmup_sched = warmup.LinearWarmup(optimizer, warmup_period=warmup_steps)
+        scheduler = CosineAnnealingLR(
+            optimizer, 
+            T_max=total_steps - warmup_steps,  # type: ignore
+            eta_min=self.lr * 2e-2 # Minimum LR at end
+        )
+        scheduler = optim.lr_scheduler.SequentialLR(
+            optimizer,
+            schedulers=[warmup_sched, scheduler], # type: ignore
+            milestones=[warmup_steps]
+        )
+    
+
+        return {
+            "optimizer": optimizer,
+            "lr_scheduler": {
+                "scheduler": scheduler,
+                "interval": "step", # Update every batch!
+                "frequency": 1
+            }
+        }

@@ -8,6 +8,7 @@ dependencies = [
     "flameprof>=0.4",
     "lightning>=2.6.0",
     "py-spy>=0.4.1",
+    "pytorch-warmup>=0.2.0",
     "soundfile>=0.13.1",
     "torch>=2.8.0",
     "torchaudio==2.8.0",

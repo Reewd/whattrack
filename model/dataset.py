@@ -196,34 +196,23 @@ class AudioDataset(AbstractAudioDataset):
 
 
 def collate_fn(batch):
-    """Convert waveforms to spectrograms."""
+    """Stack waveforms into batches. Spectrogram computation moved to GPU."""
     anchors = []
     positives = []
     
-    # Create spectrogram transform
-    spec_transform = T.MelSpectrogram(
-        sample_rate=8000,
-        n_fft=1024,
-        hop_length=512,
-        n_mels=128
-    )
-    
     for anchor, pos in batch:
-        # Convert to spectrogram and take log
-        anchor_spec = torch.log(spec_transform(anchor) + 1e-9)
-        anchors.append(anchor_spec)
-        
+        anchors.append(anchor)
         if len(pos) > 0:
             for p in pos:
-                pos_spec = torch.log(spec_transform(p) + 1e-9)
-                positives.append(pos_spec)
+                positives.append(p)
     
-    anchors_batch = torch.stack(anchors).unsqueeze(1)  # (batch, 1, freq, time)
+    # Stack as raw waveforms - spectrogram will be computed on GPU
+    anchors_batch = torch.stack(anchors)  # (batch, n_samples)
     
     if len(positives) > 0:
-        positives_batch = torch.stack(positives).unsqueeze(1)
+        positives_batch = torch.stack(positives)  # (n_pos_total, n_samples)
     else:
-        positives_batch = torch.empty(0, 1, anchors_batch.shape[2], anchors_batch.shape[3])
+        positives_batch = torch.empty(0, anchors_batch.shape[1])
     
     return anchors_batch, positives_batch
 

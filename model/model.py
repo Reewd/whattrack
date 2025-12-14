@@ -2,6 +2,7 @@ import torch
 from torch import nn, utils, optim, Tensor
 from torch.optim.lr_scheduler import CosineAnnealingLR, LinearLR
 import torch.nn.functional as F
+from torchaudio import transforms as T
 import lightning as L
 import math
 
@@ -11,6 +12,13 @@ class Model(nn.Module):
         super().__init__()
         self.patch_size = patch_size
         self.embed_dim = embed_dim
+
+        self.spec_transform = T.MelSpectrogram(
+            sample_rate=8000,
+            n_fft=1024,
+            hop_length=512,
+            n_mels=128
+        )
         
         # Patch embedding: convert image patches to embeddings
         self.patch_embed = nn.Conv2d(1, embed_dim, kernel_size=patch_size, stride=patch_size)
@@ -38,8 +46,11 @@ class Model(nn.Module):
         self.head = nn.Linear(embed_dim, embed_dim)
 
     def forward(self, x: Tensor) -> Tensor:
-        # x: (N, 1, H, W) - input spectrogram
+        # x: (N, n_samples) - input waveform
         N = x.shape[0]
+
+        x = self.spec_transform(x)
+        x = torch.log(x + 1e-9).unsqueeze(1)  # Log-mel spectrogram
         
         # Patch embedding: (N, 1, H, W) -> (N, embed_dim, H/P, W/P)
         x = self.patch_embed(x)  # (N, embed_dim, n_patches_h, n_patches_w)

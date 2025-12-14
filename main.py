@@ -23,6 +23,7 @@ def main():
     args = argparser.parse_args()
 
     if args.faster_h100:
+        print("Using faster H100 optimizations")
         torch.set_float32_matmul_precision('high')
 
     train_path = args.train_path

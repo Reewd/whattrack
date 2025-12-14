@@ -81,7 +81,7 @@ def main():
         dirpath='checkpoints',
         filename='best-model-{epoch:02d}-{train_loss:.4f}-{val_pos_sim:.4f}',
         save_top_k=1,
-        mode='min',
+        mode='max',
         save_last=True
     )
 

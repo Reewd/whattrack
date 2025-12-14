@@ -9,7 +9,7 @@ import torchaudio
 from typing import Tuple
 import numpy as np
 import torchaudio.transforms as T
-
+from functools import lru_cache
 
 class AbstractAudioDataset(Dataset, ABC):
     @abstractmethod
@@ -78,7 +78,7 @@ class AudioDataset(AbstractAudioDataset):
         
         for audio_file in self.audio_files:
             # Get audio length
-            info = torchaudio.info(audio_file) # type: ignore
+            info = self._get_audio_info(audio_file)
             # self.audio_infos.append(info)
             n_frames = info.num_frames
             
@@ -102,6 +102,11 @@ class AudioDataset(AbstractAudioDataset):
     
     def __len__(self):
         return len(self.segments)
+    
+    @lru_cache(maxsize=1024)
+    def _get_audio_info(self, file_path: Path):
+        """Cache audio info to avoid repeated disk access."""
+        return torchaudio.info(file_path)  # type: ignore
     
     def __getitem__(self, idx) -> Tuple[torch.Tensor, torch.Tensor]:
         """
@@ -163,7 +168,7 @@ class AudioDataset(AbstractAudioDataset):
     def _load_audio_segment(self, file_path: Path, start_sample: int, n_samples: int) -> torch.Tensor:
         """Load a specific segment from audio file."""
         # Load audio
-        info = torchaudio.info(file_path)  # type: ignore
+        info = self._get_audio_info(file_path)
         total_frames = info.num_frames
 
         actual_start = max(0, start_sample)

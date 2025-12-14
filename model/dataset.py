@@ -236,6 +236,7 @@ class AudioDataModule(pl.LightningDataModule):
         n_positives_per_anchor: int = 1,
         train_augmentations: AudioAugmentations | None = None,
         val_augmentations: AudioAugmentations | None = None,
+        prefetch_factor: int = 4
     ):
         super().__init__()
         self.train_path = train_path
@@ -251,6 +252,7 @@ class AudioDataModule(pl.LightningDataModule):
         self.n_positives_per_anchor = n_positives_per_anchor
         self.train_augmentations = train_augmentations
         self.val_augmentations = val_augmentations
+        self.prefetch_factor = prefetch_factor
         
     def setup(self, stage: str | None = None):
         if stage == "fit" or stage is None:
@@ -297,7 +299,8 @@ class AudioDataModule(pl.LightningDataModule):
             num_workers=self.num_workers,
             persistent_workers=True if self.num_workers > 0 else False,
             collate_fn=collate_fn,
-            pin_memory=True
+            pin_memory=True,
+            prefetch_factor=self.prefetch_factor if self.num_workers > 0 else None
         )
     
     def val_dataloader(self):
@@ -309,7 +312,8 @@ class AudioDataModule(pl.LightningDataModule):
                 num_workers=self.num_workers,
                 persistent_workers=True if self.num_workers > 0 else False,
                 collate_fn=collate_fn,
-                pin_memory=True
+                pin_memory=True,
+                prefetch_factor=self.prefetch_factor if self.num_workers > 0 else None
             )
         return None
     
@@ -322,7 +326,8 @@ class AudioDataModule(pl.LightningDataModule):
                 num_workers=self.num_workers,
                 persistent_workers=True if self.num_workers > 0 else False,
                 collate_fn=collate_fn,
-                pin_memory=True
+                pin_memory=True,
+                prefetch_factor=self.prefetch_factor if self.num_workers > 0 else None
             )
         return None
 

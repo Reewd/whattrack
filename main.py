@@ -24,6 +24,7 @@ def parse_args():
     argparser.add_argument('--suppress-warnings', action='store_true', help='Suppress warnings during training')
     argparser.add_argument('--lr', type=float, default=1e-3, help='Learning rate for the optimizer')
     argparser.add_argument('--run-name', type=str, default=None, help='WandB run name')
+    argparser.add_argument('--prefetch-factor', type=int, default=4, help='Number of batches to prefetch per worker')
     args = argparser.parse_args()
 
     if args.faster_h100:
@@ -63,7 +64,16 @@ def main():
     ]
 )
 
-    dm = AudioDataModule(train_path=train_path, val_path=val_path, test_path=test_path, num_workers=args.num_workers, train_augmentations=augmentations, batch_size=args.batch_size, val_augmentations=augmentations)
+    dm = AudioDataModule(
+        train_path=train_path, 
+        val_path=val_path, 
+        test_path=test_path, 
+        num_workers=args.num_workers, 
+        train_augmentations=augmentations, 
+        batch_size=args.batch_size, 
+        val_augmentations=augmentations,
+        prefetch_factor=args.prefetch_factor
+    )
     
     # Configure checkpoint callback to save best model based on lowest loss
     checkpoint_callback = ModelCheckpoint(
@@ -71,7 +81,7 @@ def main():
         dirpath='checkpoints',
         filename='best-model-{epoch:02d}-{train_loss:.4f}-{val_pos_sim:.4f}',
         save_top_k=1,
-        mode='min',
+        mode='max',
         save_last=True
     )
 

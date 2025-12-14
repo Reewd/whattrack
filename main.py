@@ -7,6 +7,8 @@ import lightning as L
 from pytorch_lightning.loggers import WandbLogger
 from lightning.pytorch.callbacks import ModelCheckpoint, DeviceStatsMonitor
 import argparse
+import torch
+
 def main():
     argparser = argparse.ArgumentParser()
     argparser.add_argument('--resume_from_checkpoint', type=str, default=None, help='Path to checkpoint to resume from')
@@ -17,7 +19,11 @@ def main():
     argparser.add_argument('--batch-size', type=int, default=300, help='Batch size for training')
     argparser.add_argument('--num-workers', type=int, default=32, help='Number of workers for data loading')
     argparser.add_argument('--max-epochs', type=int, default=5, help='Maximum number of training epochs')
+    argparser.add_argument('--faster-h100', action='store_true', help='Use faster H100 optimizations')
     args = argparser.parse_args()
+
+    if args.faster_h100:
+        torch.set_float32_matmul_precision('high')
 
     train_path = args.train_path
     val_path = args.val_path

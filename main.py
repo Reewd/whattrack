@@ -11,7 +11,7 @@ import warnings
 
 def parse_args():
     argparser = argparse.ArgumentParser()
-    argparser.add_argument('--resume_from_checkpoint', type=str, default=None, help='Path to checkpoint to resume from')
+    argparser.add_argument('--checkpoint', type=str, default=None, help='Path to checkpoint to resume from')
     argparser.add_argument('--train-path', type=str, default='dataset/music/train-10k-30s', help='Path to training dataset')
     argparser.add_argument('--val-path', type=str, default='dataset/music/val-query-db-500-30s', help='Path to validation dataset')
     argparser.add_argument('--test-path', type=str, default='dataset/music/test-query-db-500-30s/db', help='Path to test dataset')  
@@ -24,6 +24,7 @@ def parse_args():
     argparser.add_argument('--lr', type=float, default=1e-3, help='Learning rate for the optimizer')
     argparser.add_argument('--run-name', type=str, default=None, help='WandB run name')
     argparser.add_argument('--prefetch-factor', type=int, default=4, help='Number of batches to prefetch per worker')
+    argparser.add_argument('--skip-training', action='store_true', help='Skip training and only run evaluation')
     args = argparser.parse_args()
 
     if args.faster_h100:
@@ -62,7 +63,7 @@ def main():
                 sample_rate=8000
             ),
             PitchJitterAugmentation(
-                steps_range=(-1, 1),
+                steps_range=(-2, 2),
                 sample_rate=8000,
                 train=True
             ),
@@ -81,13 +82,13 @@ def main():
                 sample_rate=8000,
                 train=True
             ),
-            BandPassFilterAugmentation(
-                lower_range=(300, 500),
-                upper_range=(4000, 6000),
-                filter_order=4,
-                sample_rate=8000,
-                train=True,
-            ),
+            #BandPassFilterAugmentation(
+            #    lower_range=(300, 500),
+            #    upper_range=(4000, 6000),
+            #    filter_order=4,
+            #    sample_rate=8000,
+            #    train=True,
+            #),
         ]
     )
 
@@ -100,6 +101,7 @@ def main():
         train_augmentations=augmentations, 
         batch_size=args.batch_size, 
         val_augmentations=augmentations,
+        test_augmentations=augmentations
         prefetch_factor=args.prefetch_factor,
         sample_duration_s=2,
         # hop_duration_s=1
@@ -124,7 +126,13 @@ def main():
     print("Starting training...")
     trainer = L.Trainer(max_epochs=args.max_epochs, logger=wandb_logger, callbacks=[checkpoint_callback, device_stats, lr_callback]) # type: ignore
     dm.setup()
-    trainer.fit(model=model, train_dataloaders=dm.train_dataloader(), val_dataloaders=dm.val_dataloader())
+    
+    if not args.skip_training:
+        trainer.fit(model=model, train_dataloaders=dm.train_dataloader(), val_dataloaders=dm.val_dataloader())
+    else:
+        model = LitContrastive.load_from_checkpoint(args.resume_from_checkpoint)
+
+    trainer.test(model=model, dataloaders=dm.test_dataloader())
     
     
 if __name__ == "__main__":

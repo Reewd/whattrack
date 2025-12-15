@@ -130,6 +130,19 @@ class LitContrastive(L.LightningModule):
         }, prog_bar=True, sync_dist=True)
 
         return alignment
+    
+    def test_step(self, batch, batch_idx):
+        # run a test step and compute the top1% retrieval accuracy
+        x_clean, x_aug = batch
+        z_clean = F.normalize(self(x_clean), dim=1)
+        z_aug = F.normalize(self(x_aug), dim=1)
+        z_all = torch.cat([z_clean, z_aug], dim=0)
+        sim_matrix = z_all @ z_all.t() / self.temperature
+        N = z_clean.size(0)
+        targets = torch.arange(2 * N, device=z_all.device)
+        top1 = (sim_matrix.topk(2, dim=1).indices[:, 1] == targets).float().mean()
+        self.log("test_top1", top1, prog_bar=True)
+        return top1
 
     def configure_optimizers(self): # type: ignore
         optimizer = optim.AdamW(self.parameters(), lr=self.lr)

@@ -168,8 +168,12 @@ class ImpulseResponseAugmentation(AudioAugmentation):
         Returns:
             Convolved audio (max-normalized)
         """
-        # Determine FFT length (max of audio and IR lengths)
-        fft_length = max(len(audio), len(ir))
+        # Align device/dtype to avoid CPU/GPU or precision mismatches
+        ir = ir.to(device=audio.device, dtype=audio.dtype)
+        
+        # Use linear convolution length to avoid circular wrap-around
+        conv_length = len(audio) + len(ir) - 1
+        fft_length = conv_length  # good enough; optionally pad to next pow2 for speed
         
         # FFT of both signals
         audio_fft = torch.fft.fft(audio, n=fft_length)
@@ -178,11 +182,11 @@ class ImpulseResponseAugmentation(AudioAugmentation):
         # Multiply in frequency domain (equivalent to convolution in time domain)
         convolved_fft = audio_fft * ir_fft
         
-        # IFFT back to time domain
-        convolved = torch.fft.ifft(convolved_fft)
+        # IFFT back to time domain (linear convolution result)
+        convolved = torch.fft.ifft(convolved_fft).real[:conv_length]
         
-        # Take real part and truncate to original audio length
-        convolved = convolved.real[:len(audio)]
+        # Return same length as input (drop late tail to match caller expectation)
+        convolved = convolved[: len(audio)]
         
         # Max-normalize
         return self._max_normalize(convolved)

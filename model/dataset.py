@@ -233,6 +233,7 @@ class AudioDataModule(pl.LightningDataModule):
         n_positives_per_anchor: int = 1,
         train_augmentations: AudioAugmentations | None = None,
         val_augmentations: AudioAugmentations | None = None,
+        test_augmentations: AudioAugmentations | None = None,
         prefetch_factor: int = 4
     ):
         super().__init__()
@@ -250,6 +251,7 @@ class AudioDataModule(pl.LightningDataModule):
         self.train_augmentations = train_augmentations
         self.val_augmentations = val_augmentations
         self.prefetch_factor = prefetch_factor
+        self.test_augmentations = test_augmentations
         
     def setup(self, stage: str | None = None):
         if stage == "fit" or stage is None:
@@ -280,7 +282,7 @@ class AudioDataModule(pl.LightningDataModule):
             if self.test_path:
                 self.test_dataset = AudioDataset(
                     path=self.test_path,
-                    augmentations=None,  # No augmentations for test
+                    augmentations=self.test_augmentations,  # No augmentations for test
                     sample_duration_s=self.sample_duration_s,
                     hop_duration_s=self.hop_duration_s,
                     sample_rate=self.sample_rate,

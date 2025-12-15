@@ -52,7 +52,7 @@ def main():
             BackgroundNoiseMixing(
                 files_path=f"{aug_dir}/bg",
                 train=True,
-                snr_range=(0, 10),
+                snr_range=(0, 15),
                 amp_range=(0.1, 1.4),
                 sample_rate=8000
             ),
@@ -74,7 +74,7 @@ def main():
                 train=True
             ),
             ReverbAugmentation(
-                reverb_amount=(30, 60),
+                reverb_amount=(5, 30),
                 room_scale=(30, 80),
                 damping=(30, 70),
                 wet_dry_mix=(20, 50),
@@ -82,10 +82,11 @@ def main():
                 train=True
             ),
             LowPassFilterAugmentation(
-                cutoff_freq_range=(1000, 4000),
+                cutoff_freq_range=(1000, 6000),
                 filter_order=4,
                 sample_rate=8000,
-                train=True
+                train=True,
+                p=0.5
             )
         ]
     )

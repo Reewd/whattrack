@@ -5,6 +5,7 @@ from .pitch_jitter import PitchJitterAugmentation
 from .tempo_jitter import TempoJitterAugmentation
 from .reverb import ReverbAugmentation
 from .volume import VolumeAugmentation
+from .low_pass_filter import LowPassFilterAugmentation
 
 __all__ = [
     "AudioAugmentation",
@@ -14,4 +15,5 @@ __all__ = [
     "TempoJitterAugmentation",
     "ReverbAugmentation",
     "VolumeAugmentation",
+    "LowPassFilterAugmentation"
 ]

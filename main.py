@@ -53,6 +53,7 @@ def main():
                 files_path=f"{aug_dir}/bg",
                 train=True,
                 snr_range=(0, 10),
+                amp_range=(0.1, 1.4),
                 sample_rate=8000
             ),
             ImpulseResponseAugmentation(
@@ -66,7 +67,7 @@ def main():
                 train=True
             ),
             VolumeAugmentation(
-                gain_range=(-6.0, 6.0),
+                gain_range=(-4.5, 4.5),
                 scale_range=(0.5, 1.5),
                 clipping=True,
                 sample_rate=8000,
@@ -80,6 +81,12 @@ def main():
                 sample_rate=8000,
                 train=True
             ),
+            LowPassFilterAugmentation(
+                cutoff_freq_range=(1000, 4000),
+                filter_order=4,
+                sample_rate=8000,
+                train=True
+            )
         ]
     )
 

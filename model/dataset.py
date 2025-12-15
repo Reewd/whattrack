@@ -286,7 +286,7 @@ class AudioDataModule(pl.LightningDataModule):
                     sample_duration_s=self.sample_duration_s,
                     hop_duration_s=self.hop_duration_s,
                     sample_rate=self.sample_rate,
-                    n_positives_per_anchor=0,  # No positives for test DB
+                    n_positives_per_anchor=self.n_positives_per_anchor,  # No positives for test DB
                     train=False
                 )
     

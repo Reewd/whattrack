@@ -81,13 +81,12 @@ def main():
                 sample_rate=8000,
                 train=True
             ),
-            LowPassFilterAugmentation(
-                cutoff_freq_range=(1000, 6000),
+            HighPassFilterAugmentation(
+                cutoff_freq_range=(80, 300),
                 filter_order=4,
                 sample_rate=8000,
-                train=True,
-                p=0.5
-            )
+                train=True
+            ),
         ]
     )
 

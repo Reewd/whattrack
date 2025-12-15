@@ -7,6 +7,7 @@ from .reverb import ReverbAugmentation
 from .volume import VolumeAugmentation
 from .low_pass_filter import LowPassFilterAugmentation
 from .high_pass_filter import HighPassFilterAugmentation
+from .band_pass_filter import BandPassFilterAugmentation
 
 __all__ = [
     "AudioAugmentation",
@@ -18,4 +19,5 @@ __all__ = [
     "VolumeAugmentation",
     "LowPassFilterAugmentation",
     "HighPassFilterAugmentation",
+    "BandPassFilterAugmentation",
 ]

@@ -81,11 +81,12 @@ def main():
                 sample_rate=8000,
                 train=True
             ),
-            HighPassFilterAugmentation(
-                cutoff_freq_range=(80, 300),
+            BandPassFilterAugmentation(
+                lower_range=(300, 500),
+                upper_range=(4000, 6000),
                 filter_order=4,
                 sample_rate=8000,
-                train=True
+                train=True,
             ),
         ]
     )

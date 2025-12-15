@@ -177,6 +177,7 @@ class LitGenreClassifier(L.LightningModule):
         if freeze_encoder:
             for param in self.encoder.parameters():
                 param.requires_grad = False
+            self.encoder.eval()  # Put in eval mode to freeze BN/dropout
         
         # Create classifier MLP on top of frozen encoder
         embed_dim = self.encoder.embed_dim
@@ -190,16 +191,36 @@ class LitGenreClassifier(L.LightningModule):
             nn.Linear(1024, num_classes)
         )
         
+        # Better initialization
+        self._init_weights()
+        
         self.num_classes = num_classes
         self.lr = lr
+        self.freeze_encoder = freeze_encoder
+    
+    def _init_weights(self):
+        """Initialize classifier weights properly"""
+        for m in self.classifier.modules():
+            if isinstance(m, nn.Linear):
+                nn.init.xavier_uniform_(m.weight)
+                if m.bias is not None:
+                    nn.init.constant_(m.bias, 0)
+            elif isinstance(m, nn.BatchNorm1d):
+                nn.init.constant_(m.weight, 1)
+                nn.init.constant_(m.bias, 0)
 
     def forward(self, x):
-        # Get embedding from frozen encoder
-        with torch.no_grad() if not any(p.requires_grad for p in self.encoder.parameters()) else torch.enable_grad():
+        # Get embedding from encoder
+        if self.freeze_encoder:
+            self.encoder.eval()  # Ensure eval mode
+            with torch.no_grad():
+                embedding = self.encoder(x)
+        else:
             embedding = self.encoder(x)
-            # Handle case where encoder might return tuple
-            if isinstance(embedding, tuple):
-                embedding = embedding[0]
+        
+        # Handle case where encoder might return tuple
+        if isinstance(embedding, tuple):
+            embedding = embedding[0]
         
         # Classify using trainable MLP
         logits = self.classifier(embedding)
@@ -232,8 +253,15 @@ class LitGenreClassifier(L.LightningModule):
         return loss
 
     def configure_optimizers(self):
-        # Only optimize classifier parameters (encoder is frozen)
-        optimizer = optim.AdamW(self.classifier.parameters(), lr=self.lr)
+        # Only optimize classifier parameters when encoder is frozen
+        if self.freeze_encoder:
+            optimizer = optim.AdamW(self.classifier.parameters(), lr=self.lr, weight_decay=0.01)
+        else:
+            # Different LRs for encoder vs classifier when both training
+            optimizer = optim.AdamW([
+                {'params': self.encoder.parameters(), 'lr': self.lr * 0.1},
+                {'params': self.classifier.parameters(), 'lr': self.lr}
+            ], weight_decay=0.01)
         
         total_steps = self.trainer.estimated_stepping_batches
         warmup_steps = int(0.1 * total_steps)

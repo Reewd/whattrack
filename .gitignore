@@ -215,3 +215,5 @@ logs_out/
 weights/
 fma_metadata/
 fma_small/
+fma_medium/
+checkpoints/

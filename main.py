@@ -28,6 +28,8 @@ def parse_args():
     argparser.add_argument('--finetune', action='store_true', help='Finetune classifier on FMA dataset instead of training encoder')
     argparser.add_argument('--checkpoint', type=str, default='weights/best-model-v1.ckpt', help='Path to pretrained checkpoint for finetuning')
     argparser.add_argument('--freeze-encoder', action='store_true', default=True, help='Freeze encoder during finetuning')
+    argparser.add_argument('--classifier-lr', type=float, default=1e-3, help='Learning rate for classifier')
+    argparser.add_argument('--sample-duration', type=float, default=1.0, help='Duration of audio samples in seconds')
     args = argparser.parse_args()
 
     if args.faster_h100:
@@ -55,13 +57,13 @@ def main():
     if args.finetune:
         # Classification mode - use FMA dataset
         dm = FMADataModule(
-            audio_path='fma_small',
+            audio_path='fma_medium',
             metadata_path='fma_metadata',
             batch_size=args.batch_size,
             num_workers=args.num_workers,
-            sample_duration_s=2.0,
+            sample_duration_s=args.sample_duration,  # Match encoder training duration
             sample_rate=8000,
-            subset='small',
+            subset='medium',
             prefetch_factor=args.prefetch_factor
         )
         dm.setup()
@@ -73,7 +75,7 @@ def main():
         model = LitGenreClassifier(
             num_classes=dm.num_classes,
             pretrained_encoder=contrastive_model.encoder,
-            lr=args.lr,
+            lr=args.classifier_lr if args.finetune else args.lr,
             freeze_encoder=args.freeze_encoder
         )
         print(f"Training classifier with {dm.num_classes} classes (encoder frozen: {args.freeze_encoder})")
@@ -125,7 +127,7 @@ def main():
             batch_size=args.batch_size, 
             val_augmentations=augmentations,
             prefetch_factor=args.prefetch_factor,
-            sample_duration_s=2,
+            sample_duration_s=1,
             # hop_duration_s=1
         )
         dm.setup()

@@ -101,7 +101,7 @@ def main():
         train_augmentations=augmentations, 
         batch_size=args.batch_size, 
         val_augmentations=augmentations,
-        test_augmentations=augmentations
+        test_augmentations=augmentations,
         prefetch_factor=args.prefetch_factor,
         sample_duration_s=2,
         # hop_duration_s=1
@@ -130,7 +130,7 @@ def main():
     if not args.skip_training:
         trainer.fit(model=model, train_dataloaders=dm.train_dataloader(), val_dataloaders=dm.val_dataloader())
     else:
-        model = LitContrastive.load_from_checkpoint(args.resume_from_checkpoint)
+        model = LitContrastive.load_from_checkpoint(args.checkpoint)
 
     trainer.test(model=model, dataloaders=dm.test_dataloader())
     

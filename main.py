@@ -25,6 +25,7 @@ def parse_args():
     argparser.add_argument('--run-name', type=str, default=None, help='WandB run name')
     argparser.add_argument('--prefetch-factor', type=int, default=16, help='Number of batches to prefetch per worker')
     argparser.add_argument('--skip-training', action='store_true', help='Skip training and only run evaluation')
+    argparser.add_argument('--ram-disk', action='store_true', help='Load dataset into RAM disk for faster access')
     args = argparser.parse_args()
 
     if args.faster_h100:
@@ -104,6 +105,7 @@ def main():
         test_augmentations=augmentations,
         prefetch_factor=args.prefetch_factor,
         sample_duration_s=2,
+        cache_in_memory=args.ram_disk,
         # hop_duration_s=1
     )
     
@@ -126,11 +128,10 @@ def main():
     print("Starting training...")
     trainer = L.Trainer(
         max_epochs=args.max_epochs, 
-        logger=wandb_logger, 
+        logger=wandb_logger, # type: ignore
         callbacks=[checkpoint_callback, device_stats, lr_callback], 
         num_sanity_val_steps=0,
-        timeout=600  # 10 minute timeout per batch
-    ) # type: ignore
+    ) 
     dm.setup()
     
     if not args.skip_training:

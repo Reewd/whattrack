@@ -41,7 +41,8 @@ class AudioDataset(AbstractAudioDataset):
         sample_rate: int = 8000,
         n_positives_per_anchor: int = 1,
         offset_margin_ratio: float = 0.4,
-        train: bool = True
+        train: bool = True,
+        cache_in_memory: bool = True
     ):
         self.path = Path(path)
         self.augPath = Path(augPath) if augPath is not None else None
@@ -52,6 +53,7 @@ class AudioDataset(AbstractAudioDataset):
         self.offset_margin_ratio = offset_margin_ratio
         self.train = train
         self.augmentations = augmentations
+        self.cache_in_memory = cache_in_memory
         self.audio_infos = []
         
         # Collect audio files
@@ -62,6 +64,16 @@ class AudioDataset(AbstractAudioDataset):
                     self.audio_files.append(Path(dirpath) / filename)
         
         assert len(self.audio_files) > 0, f"No .wav files found in {self.path}"
+        
+        # Pre-load audio files into memory if enabled
+        if self.cache_in_memory:
+            print(f"Pre-loading {len(self.audio_files)} audio files into memory...")
+            self._audio_cache = self._preload_audio_files()
+            total_samples = sum(len(audio) for audio in self._audio_cache.values())
+            memory_mb = total_samples * 4 / 1024 / 1024  # float32 = 4 bytes
+            print(f"Loaded {len(self._audio_cache)} files (~{memory_mb:.1f} MB)")
+        else:
+            self._audio_cache = {}
         
         # Create segment list: [[file_path, seg_idx, offset_min, offset_max], ...]
         self.segments = self._create_segment_list()
@@ -128,6 +140,37 @@ class AudioDataset(AbstractAudioDataset):
     def __len__(self):
         return len(self.segments)
     
+    def _preload_audio_files(self) -> dict[str, torch.Tensor]:
+        """
+        Pre-load all audio files into memory for faster access.
+        
+        Returns:
+            Dictionary mapping file paths to pre-loaded audio tensors
+        """
+        audio_cache = {}
+        print("  Loading audio files (this may take several minutes)...")
+        
+        for i, audio_file in enumerate(self.audio_files):
+            if i % 1000 == 0 and i > 0:
+                print(f"  Loaded {i}/{len(self.audio_files)} files...")
+            
+            waveform, sr = torchaudio.load(audio_file)
+            
+            # Convert to mono if stereo
+            if waveform.shape[0] > 1:
+                waveform = waveform.mean(dim=0, keepdim=True)
+            
+            # Resample if necessary
+            if sr != self.sample_rate:
+                resampler = T.Resample(sr, self.sample_rate)
+                waveform = resampler(waveform)
+            
+            # Store as squeezed tensor
+            audio_cache[str(audio_file)] = waveform.squeeze(0)
+        
+        print(f"  Pre-loading complete!")
+        return audio_cache
+    
     @lru_cache(maxsize=65536)
     def _get_audio_info(self, file_path: Path):
         """Cache audio info to avoid repeated disk access."""
@@ -191,8 +234,27 @@ class AudioDataset(AbstractAudioDataset):
         return anchor, positives_tensor
     
     def _load_audio_segment(self, file_path: Path, start_sample: int, n_samples: int) -> torch.Tensor:
-        """Load a specific segment from audio file."""
-        # Load audio
+        """Load a specific segment from audio file, using cache if available."""
+        
+        # Use cached audio if available
+        if self.cache_in_memory and str(file_path) in self._audio_cache:
+            full_waveform = self._audio_cache[str(file_path)]
+            total_frames = len(full_waveform)
+            
+            actual_start = max(0, start_sample)
+            actual_end = min(start_sample + n_samples, total_frames)
+            
+            # Extract segment
+            segment = full_waveform[actual_start:actual_end]
+            
+            # Pad if necessary
+            if len(segment) < n_samples:
+                padding = n_samples - len(segment)
+                segment = torch.nn.functional.pad(segment, (0, padding))
+            
+            return segment
+        
+        # Fallback to disk loading if not cached
         info = self._get_audio_info(file_path)
         total_frames = info.num_frames
 
@@ -259,7 +321,8 @@ class AudioDataModule(pl.LightningDataModule):
         train_augmentations: AudioAugmentations | None = None,
         val_augmentations: AudioAugmentations | None = None,
         test_augmentations: AudioAugmentations | None = None,
-        prefetch_factor: int = 4
+        prefetch_factor: int = 4,
+        cache_in_memory: bool = True
     ):
         super().__init__()
         self.train_path = train_path
@@ -277,6 +340,7 @@ class AudioDataModule(pl.LightningDataModule):
         self.val_augmentations = val_augmentations
         self.prefetch_factor = prefetch_factor
         self.test_augmentations = test_augmentations
+        self.cache_in_memory = cache_in_memory
         
     def setup(self, stage: str | None = None):
         if stage == "fit" or stage is None:
@@ -288,7 +352,8 @@ class AudioDataModule(pl.LightningDataModule):
                 hop_duration_s=self.hop_duration_s,
                 sample_rate=self.sample_rate,
                 n_positives_per_anchor=self.n_positives_per_anchor,
-                train=True
+                train=True,
+                cache_in_memory=self.cache_in_memory
             )
             
             if self.val_path:
@@ -300,7 +365,8 @@ class AudioDataModule(pl.LightningDataModule):
                     hop_duration_s=self.hop_duration_s,
                     sample_rate=self.sample_rate,
                     n_positives_per_anchor=self.n_positives_per_anchor,
-                    train=False  # No random offsets for validation
+                    train=False,  # No random offsets for validation
+                    cache_in_memory=self.cache_in_memory
                 )
         
         if stage == "test" or stage is None:
@@ -312,7 +378,8 @@ class AudioDataModule(pl.LightningDataModule):
                     hop_duration_s=self.hop_duration_s,
                     sample_rate=self.sample_rate,
                     n_positives_per_anchor=self.n_positives_per_anchor,  # No positives for test DB
-                    train=False
+                    train=False,
+                    cache_in_memory=self.cache_in_memory
                 )
     
     def train_dataloader(self):

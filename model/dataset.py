@@ -10,6 +10,7 @@ from typing import Tuple
 import numpy as np
 import torchaudio.transforms as T
 from functools import lru_cache
+from hashlib import sha256
 
 class AbstractAudioDataset(Dataset, ABC):
     @abstractmethod
@@ -73,6 +74,15 @@ class AudioDataset(AbstractAudioDataset):
         Similar to get_fns_seg_list() in neural-audio-fp.
         Pre-computes segment boundaries for faster access.
         """
+
+        try:
+            with open(self.path / "segment_list_cache.cache", "rb") as f:
+                segments = torch.load(f)
+                print(f"Loaded segment list from cache with {len(segments)} segments")
+                return segments
+        except FileNotFoundError:
+            pass
+
         segments = []
         n_samples_per_segment = int(self.sample_duration_s * self.sample_rate)
         n_samples_per_hop = int(self.hop_duration_s * self.sample_rate)
@@ -104,6 +114,15 @@ class AudioDataset(AbstractAudioDataset):
                 segments.append([audio_file, seg_idx, offset_min, offset_max])
         
         print(f"Segment list creation complete: {len(segments)} segments")
+
+        # Cache segment list to disk
+        try:
+            with open(self.path / "segment_list_cache.cache", "wb") as f:
+                torch.save(segments, f)
+                print(f"Saved segment list cache with {len(segments)} segments")
+        except Exception as e:
+            print(f"Failed to save segment list cache: {e}")
+
         return segments
     
     def __len__(self):
@@ -305,7 +324,8 @@ class AudioDataModule(pl.LightningDataModule):
             persistent_workers=True if self.num_workers > 0 else False,
             collate_fn=collate_fn,
             pin_memory=True,
-            prefetch_factor=self.prefetch_factor if self.num_workers > 0 else None
+            prefetch_factor=self.prefetch_factor if self.num_workers > 0 else None,
+            timeout=300 if self.num_workers > 0 else 0  # 5 min timeout for workers
         )
     
     def val_dataloader(self):
@@ -318,7 +338,8 @@ class AudioDataModule(pl.LightningDataModule):
                 persistent_workers=True if self.num_workers > 0 else False,
                 collate_fn=collate_fn,
                 pin_memory=True,
-                prefetch_factor=self.prefetch_factor if self.num_workers > 0 else None
+                prefetch_factor=self.prefetch_factor if self.num_workers > 0 else None,
+                timeout=300 if self.num_workers > 0 else 0  # 5 min timeout for workers
             )
         return None
     
@@ -332,7 +353,8 @@ class AudioDataModule(pl.LightningDataModule):
                 persistent_workers=True if self.num_workers > 0 else False,
                 collate_fn=collate_fn,
                 pin_memory=True,
-                prefetch_factor=self.prefetch_factor if self.num_workers > 0 else None
+                prefetch_factor=self.prefetch_factor if self.num_workers > 0 else None,
+                timeout=300 if self.num_workers > 0 else 0  # 5 min timeout for workers
             )
         return None
 

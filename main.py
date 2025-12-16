@@ -124,11 +124,24 @@ def main():
     device_stats = DeviceStatsMonitor()
     
     print("Starting training...")
-    trainer = L.Trainer(max_epochs=args.max_epochs, logger=wandb_logger, callbacks=[checkpoint_callback, device_stats, lr_callback]) # type: ignore
+    trainer = L.Trainer(
+        max_epochs=args.max_epochs, 
+        logger=wandb_logger, 
+        callbacks=[checkpoint_callback, device_stats, lr_callback], 
+        num_sanity_val_steps=0,
+        timeout=600  # 10 minute timeout per batch
+    ) # type: ignore
     dm.setup()
     
     if not args.skip_training:
-        trainer.fit(model=model, train_dataloaders=dm.train_dataloader(), val_dataloaders=dm.val_dataloader())
+        try:
+            print("Fitting model (this may take a while)...")
+            trainer.fit(model=model, train_dataloaders=dm.train_dataloader(), val_dataloaders=dm.val_dataloader())
+        except Exception as e:
+            print(f"Training error: {e}")
+            import traceback
+            traceback.print_exc()
+            raise
     else:
         model = LitContrastive.load_from_checkpoint(args.checkpoint)
 

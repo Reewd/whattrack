@@ -103,7 +103,7 @@ class AudioDataset(AbstractAudioDataset):
         
         print(f"Creating segment list for {len(self.audio_files)} files (this may take a moment)...")
         
-        for i, audio_file in tqdm(enumerate(self.audio_files)):            
+        for i, audio_file in tqdm(enumerate(self.audio_files), total=len(self.audio_files)):            
             # Get audio length
             info = self._get_audio_info(audio_file)
             n_frames = info.num_frames
@@ -149,7 +149,7 @@ class AudioDataset(AbstractAudioDataset):
         audio_cache = {}
         print("  Loading audio files (this may take several minutes)...")
         
-        for i, audio_file in tqdm(enumerate(self.audio_files)):            
+        for i, audio_file in tqdm(enumerate(self.audio_files), total=len(self.audio_files)):            
             waveform, sr = torchaudio.load(audio_file)
             
             # Convert to mono if stereo

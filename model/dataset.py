@@ -4,6 +4,8 @@ from torch.utils.data import DataLoader, Dataset
 from pathlib import Path
 from os import walk
 from abc import ABC, abstractmethod
+
+from tqdm import tqdm 
 from audio import AudioAugmentations
 import torchaudio
 from typing import Tuple
@@ -101,10 +103,7 @@ class AudioDataset(AbstractAudioDataset):
         
         print(f"Creating segment list for {len(self.audio_files)} files (this may take a moment)...")
         
-        for i, audio_file in enumerate(self.audio_files):
-            if i % 5000 == 0 and i > 0:
-                print(f"  Processed {i}/{len(self.audio_files)} files, {len(segments)} segments so far...")
-            
+        for i, audio_file in tqdm(enumerate(self.audio_files)):            
             # Get audio length
             info = self._get_audio_info(audio_file)
             n_frames = info.num_frames
@@ -150,10 +149,7 @@ class AudioDataset(AbstractAudioDataset):
         audio_cache = {}
         print("  Loading audio files (this may take several minutes)...")
         
-        for i, audio_file in enumerate(self.audio_files):
-            if i % 1000 == 0 and i > 0:
-                print(f"  Loaded {i}/{len(self.audio_files)} files...")
-            
+        for i, audio_file in tqdm(enumerate(self.audio_files)):            
             waveform, sr = torchaudio.load(audio_file)
             
             # Convert to mono if stereo

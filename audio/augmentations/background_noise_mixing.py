@@ -6,7 +6,7 @@ from torch import Tensor
 import numpy as np
 from pathlib import Path
 from os import path, listdir, walk
-from random import choice
+from random import choice, randint
 import torchaudio
 
 class BackgroundNoiseMixing(AudioAugmentation):
@@ -53,12 +53,41 @@ class BackgroundNoiseMixing(AudioAugmentation):
         self.amp_range = amp_range
         self.sample_rate = sample_rate
         
-        # Pre-load noise segments for efficiency (optional)
-        self._noise_cache = []
+        # Pre-load all noise files into memory for efficiency
+        print(f"Pre-loading {len(noise_files)} background noise files...")
+        self._noise_cache = self._preload_noise_files()
+        memory_mb = sum(len(n) for n in self._noise_cache) * 4 / 1024 / 1024
+        print(f"Loaded {len(self._noise_cache)} noise files (~{memory_mb:.1f} MB)")
     
     @property
     def name(self) -> str:
         return "BackgroundNoiseMixing"
+    
+    def _preload_noise_files(self) -> list[Tensor]:
+        """
+        Pre-load all noise files into memory.
+        
+        Returns:
+            List of pre-loaded noise tensors
+        """
+        noise_cache = []
+        for noise_file in self.noise_files:
+            waveform, sr = torchaudio.load(noise_file)
+            
+            # Convert to mono if stereo
+            if waveform.shape[0] > 1:
+                waveform = waveform.mean(dim=0)
+            else:
+                waveform = waveform.squeeze(0)
+            
+            # Resample if necessary
+            if sr != self.sample_rate:
+                resampler = torchaudio.transforms.Resample(sr, self.sample_rate)
+                waveform = resampler(waveform)
+            
+            noise_cache.append(waveform)
+        
+        return noise_cache
     
     def apply(self, audio_segment: Tensor) -> Tensor:
         """
@@ -107,7 +136,7 @@ class BackgroundNoiseMixing(AudioAugmentation):
     
     def _load_random_noise(self, target_length: int) -> Tensor:
         """
-        Load a random segment of background noise.
+        Load a random segment of background noise from pre-loaded cache.
         
         Args:
             target_length: Number of samples needed
@@ -116,22 +145,8 @@ class BackgroundNoiseMixing(AudioAugmentation):
             Noise segment tensor of shape (target_length,)
         """
         
-        # Randomly select a noise file
-        noise_file = choice(self.noise_files)
-        
-        # Load audio
-        waveform, sr = torchaudio.load(noise_file)
-        
-        # Convert to mono if stereo
-        if waveform.shape[0] > 1:
-            waveform = waveform.mean(dim=0)
-        else:
-            waveform = waveform.squeeze(0)
-        
-        # Resample if necessary
-        if sr != self.sample_rate:
-            resampler = torchaudio.transforms.Resample(sr, self.sample_rate)
-            waveform = resampler(waveform)
+        # Randomly select a pre-loaded noise file
+        waveform = choice(self._noise_cache)
         
         # Random offset and extract target_length samples
         if len(waveform) > target_length:

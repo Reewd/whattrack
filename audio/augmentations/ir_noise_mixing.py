@@ -41,8 +41,11 @@ class ImpulseResponseAugmentation(AudioAugmentation):
         # Load IR file paths
         self.ir_files = self._load_ir_file_paths()
         
-        # Cache for loaded IRs (optional optimization)
-        self._ir_cache = {}
+        # Pre-load all IR files into memory for efficiency
+        print(f"Pre-loading {len(self.ir_files)} IR files...")
+        self._ir_cache = self._preload_ir_files()
+        memory_mb = sum(len(ir) for ir in self._ir_cache.values()) * 4 / 1024 / 1024
+        print(f"Loaded {len(self._ir_cache)} IR files (~{memory_mb:.1f} MB)")
     
     def _load_ir_file_paths(self) -> list[Path]:
         """
@@ -76,6 +79,36 @@ class ImpulseResponseAugmentation(AudioAugmentation):
     @property
     def name(self) -> str:
         return "ImpulseResponseAugmentation"
+    
+    def _preload_ir_files(self) -> dict[str, Tensor]:
+        """
+        Pre-load all IR files into memory.
+        
+        Returns:
+            Dictionary mapping file paths to pre-loaded IR tensors
+        """
+        ir_cache = {}
+        for ir_file in self.ir_files:
+            waveform, sr = torchaudio.load(ir_file)
+            
+            # Convert to mono if stereo
+            if waveform.shape[0] > 1:
+                waveform = waveform.mean(dim=0)
+            else:
+                waveform = waveform.squeeze(0)
+            
+            # Resample if necessary
+            if sr != self.sample_rate:
+                resampler = torchaudio.transforms.Resample(sr, self.sample_rate)
+                waveform = resampler(waveform)
+            
+            # Truncate to max_ir_length for efficiency
+            if len(waveform) > self.max_ir_length:
+                waveform = waveform[:self.max_ir_length]
+            
+            ir_cache[str(ir_file)] = waveform
+        
+        return ir_cache
     
     def apply(self, audio_segment: Tensor) -> Tensor:
         """
@@ -117,42 +150,15 @@ class ImpulseResponseAugmentation(AudioAugmentation):
     
     def _load_random_ir(self) -> Tensor:
         """
-        Load a random impulse response.
+        Load a random impulse response from pre-loaded cache.
         
         Returns:
             IR tensor of shape (ir_length,), truncated to max_ir_length
         """
         
-        # Randomly select an IR file
-        ir_file = choice(self.ir_files)
-        
-        # Check cache first
-        ir_file_str = str(ir_file)
-        if ir_file_str in self._ir_cache:
-            return self._ir_cache[ir_file_str]
-        
-        # Load audio
-        waveform, sr = torchaudio.load(ir_file)
-        
-        # Convert to mono if stereo
-        if waveform.shape[0] > 1:
-            waveform = waveform.mean(dim=0)
-        else:
-            waveform = waveform.squeeze(0)
-        
-        # Resample if necessary
-        if sr != self.sample_rate:
-            resampler = torchaudio.transforms.Resample(sr, self.sample_rate)
-            waveform = resampler(waveform)
-        
-        # Truncate to max_ir_length for efficiency
-        if len(waveform) > self.max_ir_length:
-            waveform = waveform[:self.max_ir_length]
-        
-        # Cache the IR (optional)
-        self._ir_cache[ir_file_str] = waveform
-        
-        return waveform
+        # Randomly select an IR from pre-loaded cache
+        ir = choice(list(self._ir_cache.values()))
+        return ir
     
     def _convolve_fft(self, audio: Tensor, ir: Tensor) -> Tensor:
         """

@@ -71,15 +71,20 @@ class AudioDataset(AbstractAudioDataset):
         """
         Create list of all possible segments from audio files.
         Similar to get_fns_seg_list() in neural-audio-fp.
+        Pre-computes segment boundaries for faster access.
         """
         segments = []
         n_samples_per_segment = int(self.sample_duration_s * self.sample_rate)
         n_samples_per_hop = int(self.hop_duration_s * self.sample_rate)
         
-        for audio_file in self.audio_files:
+        print(f"Creating segment list for {len(self.audio_files)} files (this may take a moment)...")
+        
+        for i, audio_file in enumerate(self.audio_files):
+            if i % 5000 == 0 and i > 0:
+                print(f"  Processed {i}/{len(self.audio_files)} files, {len(segments)} segments so far...")
+            
             # Get audio length
             info = self._get_audio_info(audio_file)
-            # self.audio_infos.append(info)
             n_frames = info.num_frames
             
             # Calculate number of segments
@@ -98,12 +103,13 @@ class AudioDataset(AbstractAudioDataset):
                 
                 segments.append([audio_file, seg_idx, offset_min, offset_max])
         
+        print(f"Segment list creation complete: {len(segments)} segments")
         return segments
     
     def __len__(self):
         return len(self.segments)
     
-    @lru_cache(maxsize=1024)
+    @lru_cache(maxsize=65536)
     def _get_audio_info(self, file_path: Path):
         """Cache audio info to avoid repeated disk access."""
         return torchaudio.info(file_path)  # type: ignore

@@ -89,7 +89,7 @@ class AudioDataset(AbstractAudioDataset):
 
         try:
             with open(self.path / "segment_list_cache.cache", "rb") as f:
-                segments = torch.load(f)
+                segments = torch.load(f, weights_only=False)
                 print(f"Loaded segment list from cache with {len(segments)} segments")
                 return segments
         except FileNotFoundError:

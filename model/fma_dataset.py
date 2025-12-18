@@ -3,7 +3,7 @@ import torch
 from torch.utils.data import DataLoader, Dataset
 from pathlib import Path
 import torchaudio
-from typing import Tuple, Dict, List
+from typing import Tuple, Dict, List, Optional
 import pandas as pd
 import numpy as np
 
@@ -23,7 +23,8 @@ class FMAGenreDataset(Dataset):
         sample_duration_s: float = 2.0,
         sample_rate: int = 8000,
         subset: str = 'small',
-        split: str = 'training'
+        split: str = 'training',
+        genre_to_idx: Optional[Dict[str, int]] = None
     ):
         self.audio_path = Path(audio_path)
         self.metadata_path = Path(metadata_path)
@@ -32,6 +33,7 @@ class FMAGenreDataset(Dataset):
         self.n_samples = int(sample_duration_s * sample_rate)
         self.subset = subset
         self.split = split
+        self.genre_to_idx_override = genre_to_idx
         
         # Load metadata and create samples
         self._load_metadata()
@@ -60,9 +62,15 @@ class FMAGenreDataset(Dataset):
         # Remove tracks without genre labels
         self.track_genres = self.track_genres.dropna()
         
-        # Create genre to index mapping
-        unique_genres = sorted(self.track_genres.unique())
-        self.genre_to_idx = {genre: idx for idx, genre in enumerate(unique_genres)}
+        if self.genre_to_idx_override is None:
+            # Create genre to index mapping from this split (train expected)
+            unique_genres = sorted(self.track_genres.unique())
+            self.genre_to_idx = {genre: idx for idx, genre in enumerate(unique_genres)}
+        else:
+            # Reuse provided mapping and drop any genre not present
+            self.genre_to_idx = self.genre_to_idx_override
+            self.track_genres = self.track_genres[self.track_genres.isin(self.genre_to_idx.keys())]
+
         self.idx_to_genre = {idx: genre for genre, idx in self.genre_to_idx.items()}
         self.num_classes = len(self.genre_to_idx)
     
@@ -82,8 +90,10 @@ class FMAGenreDataset(Dataset):
                 audio_file = self.audio_path / subdir / f"{track_id_str}.wav"
             
             if audio_file.exists():
-                genre_idx = self.genre_to_idx[genre]
-                samples.append((audio_file, genre_idx))
+                # Skip samples whose genre is not in the provided mapping
+                if genre in self.genre_to_idx:
+                    genre_idx = self.genre_to_idx[genre]
+                    samples.append((audio_file, genre_idx))
         
         return samples
     
@@ -182,6 +192,9 @@ class FMADataModule(pl.LightningDataModule):
                 subset=self.subset,
                 split='training'
             )
+
+            # Share a single label mapping across splits to keep class indices aligned
+            shared_genre_to_idx = self.train_dataset.genre_to_idx
             
             self.val_dataset = FMAGenreDataset(
                 audio_path=self.audio_path,
@@ -189,7 +202,8 @@ class FMADataModule(pl.LightningDataModule):
                 sample_duration_s=self.sample_duration_s,
                 sample_rate=self.sample_rate,
                 subset=self.subset,
-                split='validation'
+                split='validation',
+                genre_to_idx=shared_genre_to_idx
             )
             
             # Store number of classes
@@ -202,7 +216,8 @@ class FMADataModule(pl.LightningDataModule):
                 sample_duration_s=self.sample_duration_s,
                 sample_rate=self.sample_rate,
                 subset=self.subset,
-                split='test'
+                split='test',
+                genre_to_idx=getattr(self, 'train_dataset', None).genre_to_idx if hasattr(self, 'train_dataset') else None
             )
     
     def train_dataloader(self):

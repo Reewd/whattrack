@@ -57,13 +57,13 @@ def main():
     if args.finetune:
         # Classification mode - use FMA dataset
         dm = FMADataModule(
-            audio_path='fma_medium',
+            audio_path='dataset/zips/fma_large',
             metadata_path='fma_metadata',
             batch_size=args.batch_size,
             num_workers=args.num_workers,
             sample_duration_s=args.sample_duration,  # Match encoder training duration
             sample_rate=8000,
-            subset='medium',
+            subset='large',
             prefetch_factor=args.prefetch_factor
         )
         dm.setup()

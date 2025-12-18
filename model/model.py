@@ -1,5 +1,7 @@
 import torch
 from torch import nn, utils, optim, Tensor
+from typing import List, Optional
+import numpy as np
 from torch.optim.lr_scheduler import CosineAnnealingLR, LinearLR
 import torch.nn.functional as F
 from torchaudio import transforms as T
@@ -175,7 +177,7 @@ class LitContrastive(L.LightningModule):
         }
 
 class LitGenreClassifier(L.LightningModule):
-    def __init__(self, num_classes: int, pretrained_encoder: Model, lr: float = 1e-3, freeze_encoder: bool = True):
+    def __init__(self, num_classes: int, pretrained_encoder: Model, lr: float = 1e-3, freeze_encoder: bool = True, class_names: Optional[List[str]] = None):
         super().__init__()
         self.save_hyperparameters(ignore=['pretrained_encoder'])
         
@@ -206,6 +208,10 @@ class LitGenreClassifier(L.LightningModule):
         self.num_classes = num_classes
         self.lr = lr
         self.freeze_encoder = freeze_encoder
+        self.class_names = class_names
+        self.test_confusion_matrix = None
+        self.test_preds = []
+        self.test_targets = []
     
     def _init_weights(self):
         """Initialize classifier weights properly"""
@@ -268,9 +274,79 @@ class LitGenreClassifier(L.LightningModule):
         loss = F.cross_entropy(logits, y)
         preds = torch.argmax(logits, dim=1)
         acc = (preds == y).float().mean()
+        gathered_preds = self.all_gather(preds).detach().reshape(-1).cpu()
+        gathered_targets = self.all_gather(y).detach().reshape(-1).cpu()
+        self.test_preds.append(gathered_preds)
+        self.test_targets.append(gathered_targets)
         self.log("test_loss", loss, prog_bar=True)
         self.log("test_acc", acc, prog_bar=True)
         return loss
+
+    def on_test_epoch_start(self):
+        self.test_confusion_matrix = None
+        self.test_preds = []
+        self.test_targets = []
+
+    def on_test_epoch_end(self):
+        if len(self.test_preds) == 0:
+            return
+
+        preds = torch.cat(self.test_preds)
+        targets = torch.cat(self.test_targets)
+        cm = torch.bincount(targets * self.num_classes + preds, minlength=self.num_classes * self.num_classes)
+        cm = cm.reshape(self.num_classes, self.num_classes)
+
+        self.test_confusion_matrix = cm
+        self.print("Test confusion matrix (rows=true, cols=pred):\n" + str(cm))
+
+        # Save a labeled confusion matrix plot if class names and plotting libs are available
+        self._maybe_save_confusion_matrix(cm)
+
+    def _maybe_save_confusion_matrix(self, cm: torch.Tensor):
+        if self.class_names is None or len(self.class_names) != self.num_classes:
+            return
+
+        try:
+            import matplotlib
+            matplotlib.use("Agg")  # Ensure non-interactive backend
+            import matplotlib.pyplot as plt
+            import seaborn as sns
+        except Exception as exc:  # pragma: no cover - best-effort plotting
+            self.print(f"Could not plot confusion matrix: {exc}")
+            return
+
+        cm_np = cm.cpu().numpy()
+        fig, ax = plt.subplots(figsize=(10, 8))
+        sns.heatmap(cm_np, annot=True, fmt="d", cmap="Blues", xticklabels=self.class_names, yticklabels=self.class_names, ax=ax, linewidths=0.5, linecolor="lightgray", square=True, annot_kws={"size":9})
+        ax.set_xlabel("Predicted")
+        ax.set_ylabel("True")
+        ax.set_title("Confusion Matrix")
+
+        out_path = "confusion_matrix_test.png"
+        fig.tight_layout()
+        fig.savefig(out_path)
+        plt.close(fig)
+        self.print(f"Saved confusion matrix to {out_path}")
+
+        # Row-normalized confusion matrix for per-class error rates
+        row_sums = cm_np.sum(axis=1, keepdims=True)
+        with np.errstate(invalid="ignore", divide="ignore"):
+            cm_norm = np.divide(cm_np, row_sums, where=row_sums != 0)
+        cm_norm = np.nan_to_num(cm_norm)
+
+        cm_norm_pct = cm_norm * 100.0
+
+        fig2, ax2 = plt.subplots(figsize=(10, 8))
+        sns.heatmap(cm_norm_pct, annot=True, fmt=".2f", cmap="Blues", xticklabels=self.class_names, yticklabels=self.class_names, ax=ax2, linewidths=0.5, linecolor="lightgray", square=True, annot_kws={"size":9}, cbar_kws={"label": "% of true class"})
+        ax2.set_xlabel("Predicted")
+        ax2.set_ylabel("True")
+        ax2.set_title("Confusion Matrix (Row-Normalized)")
+
+        norm_out_path = "confusion_matrix_test_row_norm.png"
+        fig2.tight_layout()
+        fig2.savefig(norm_out_path)
+        plt.close(fig2)
+        self.print(f"Saved row-normalized confusion matrix to {norm_out_path}")
 
     def configure_optimizers(self):
         # Only optimize classifier parameters when encoder is frozen

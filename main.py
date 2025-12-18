@@ -137,6 +137,9 @@ def main():
         if args.eval_test:
             print("Running test evaluation...")
             trainer.test(model=model, dataloaders=dm.test_dataloader())
+            if getattr(model, "test_confusion_matrix", None) is not None:
+                print("Confusion matrix (rows=true, cols=pred):")
+                print(model.test_confusion_matrix.cpu().numpy())
 
     elif args.mode == 'train-classifier':
         if not args.encoder_checkpoint:
@@ -144,6 +147,7 @@ def main():
 
         dm = build_classifier_datamodule(args)
         print(f"Number of genre classes: {dm.num_classes}")
+        class_names = [dm.train_dataset.idx_to_genre[i] for i in range(dm.num_classes)]
 
         print(f"Loading pretrained encoder from {args.encoder_checkpoint}...")
         contrastive_model = LitContrastive.load_from_checkpoint(args.encoder_checkpoint)
@@ -151,7 +155,8 @@ def main():
             num_classes=dm.num_classes,
             pretrained_encoder=contrastive_model.encoder,
             lr=args.classifier_lr,
-            freeze_encoder=args.freeze_encoder
+            freeze_encoder=args.freeze_encoder,
+            class_names=class_names
         )
         print(f"Training classifier with {dm.num_classes} classes (encoder frozen: {args.freeze_encoder})")
 
@@ -191,12 +196,14 @@ def main():
             raise ValueError("--classifier-checkpoint is required for eval-classifier")
 
         dm = build_classifier_datamodule(args)
+        class_names = [dm.train_dataset.idx_to_genre[i] for i in range(dm.num_classes)]
 
         print(f"Loading classifier from {args.classifier_checkpoint} for evaluation...")
         # Use a fresh encoder shell; weights are restored from checkpoint
         model = LitGenreClassifier.load_from_checkpoint(
             args.classifier_checkpoint,
-            pretrained_encoder=LitContrastive().encoder
+            pretrained_encoder=LitContrastive().encoder,
+            class_names=class_names
         )
 
         trainer = make_eval_trainer(device_stats)
@@ -204,6 +211,9 @@ def main():
         trainer.validate(model=model, dataloaders=dm.val_dataloader())
         print("Testing classifier...")
         trainer.test(model=model, dataloaders=dm.test_dataloader())
+        if getattr(model, "test_confusion_matrix", None) is not None:
+            print("Confusion matrix (rows=true, cols=pred):")
+            print(model.test_confusion_matrix.cpu().numpy())
     
     
 if __name__ == "__main__":

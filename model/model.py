@@ -136,6 +136,15 @@ class LitContrastive(L.LightningModule):
         self.log("val_pos_sim", pos_sim, prog_bar=True)
         return pos_sim
 
+    def test_step(self, batch, batch_idx):
+        # Reuse validation logic for test evaluation
+        x_clean, x_aug = batch
+        z_clean = F.normalize(self(x_clean), dim=1)
+        z_aug = F.normalize(self(x_aug), dim=1)
+        pos_sim = (z_clean * z_aug).sum(dim=1).mean()
+        self.log("test_pos_sim", pos_sim, prog_bar=True)
+        return pos_sim
+
     def configure_optimizers(self): # type: ignore
         optimizer = optim.AdamW(self.parameters(), lr=self.lr)
 
@@ -250,6 +259,17 @@ class LitGenreClassifier(L.LightningModule):
         
         self.log("val_loss", loss, prog_bar=True)
         self.log("val_acc", acc, prog_bar=True)
+        return loss
+
+    def test_step(self, batch, batch_idx):
+        # Mirror validation for held-out test set
+        x, y = batch
+        logits = self(x)
+        loss = F.cross_entropy(logits, y)
+        preds = torch.argmax(logits, dim=1)
+        acc = (preds == y).float().mean()
+        self.log("test_loss", loss, prog_bar=True)
+        self.log("test_acc", acc, prog_bar=True)
         return loss
 
     def configure_optimizers(self):

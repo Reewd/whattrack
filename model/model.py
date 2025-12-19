@@ -303,21 +303,10 @@ class LitGenreClassifier(L.LightningModule):
 
         self.test_confusion_matrix = cm
         self.print("Test confusion matrix (rows=true, cols=pred):\n" + str(cm))
+        self._save_confusion_matrix(cm)
 
-        # Save a labeled confusion matrix plot if class names and plotting libs are available
-        self._maybe_save_confusion_matrix(cm)
-
-    def _maybe_save_confusion_matrix(self, cm: torch.Tensor):
+    def _save_confusion_matrix(self, cm: torch.Tensor):
         if self.class_names is None or len(self.class_names) != self.num_classes:
-            return
-
-        try:
-            import matplotlib
-            matplotlib.use("Agg")  # Ensure non-interactive backend
-            import matplotlib.pyplot as plt
-            import seaborn as sns
-        except Exception as exc:  # pragma: no cover - best-effort plotting
-            self.print(f"Could not plot confusion matrix: {exc}")
             return
 
         cm_np = cm.cpu().numpy()

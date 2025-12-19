@@ -1,0 +1,1 @@
+uv run main.py --train-path dataset/neural-audio-fp-dataset/music/train-10k-30s/ --val-path dataset/neural-audio-fp-dataset/music/val-query-db-500-30s/ --test-path dataset/neural-audio-fp-dataset/music/test-query-db-500-30s/ --aug-dir dataset/neural-audio-fp-dataset/aug/ --batch-size 900 --num-workers 20 --max-epochs 10 --faster-h100

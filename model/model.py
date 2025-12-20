@@ -10,11 +10,10 @@ import math
 
 
 class Model(nn.Module):
-    def __init__(self, embed_dim: int = 512, patch_size: int = 8, num_heads: int = 8, num_layers: int = 6, hidden_dim: int = 2048, num_classes: int = None):
+    def __init__(self, embed_dim: int = 512, patch_size: int = 8, num_heads: int = 8, num_layers: int = 6, hidden_dim: int = 2048):
         super().__init__()
         self.patch_size = patch_size
         self.embed_dim = embed_dim
-        self.num_classes = num_classes
 
         self.spec_transform = T.MelSpectrogram(
             sample_rate=8000,
@@ -47,20 +46,6 @@ class Model(nn.Module):
         # Output projection
         self.norm = nn.LayerNorm(embed_dim)
         self.head = nn.Linear(embed_dim, embed_dim)
-        
-        # Optional classifier head for genre classification
-        if num_classes is not None:
-            self.classifier = nn.Sequential(
-                nn.Linear(embed_dim, hidden_dim),
-                nn.GELU(),
-                nn.Dropout(0.1),
-                nn.Linear(hidden_dim, hidden_dim // 2),
-                nn.GELU(),
-                nn.Dropout(0.1),
-                nn.Linear(hidden_dim // 2, num_classes)
-            )
-        else:
-            self.classifier = None
 
     def forward(self, x: Tensor) -> Tensor:
         # x: (N, n_samples) - input waveform
@@ -91,21 +76,16 @@ class Model(nn.Module):
         
         # Final projection
         x = self.norm(x)
-        embedding = self.head(x)  # (N, embed_dim)
+        x = self.head(x)  # (N, embed_dim)
         
-        # If classifier exists, return both embedding and logits
-        if self.classifier is not None:
-            logits = self.classifier(embedding)  # (N, num_classes)
-            return embedding, logits
-        
-        return embedding
+        return x
 
 class LitContrastive(L.LightningModule):
     def __init__(self, embed_dim=512, lr=1e-3, temperature=0.1):
         super().__init__()
         self.save_hyperparameters()
         self.encoder = Model(embed_dim=embed_dim)
-        self.temperature = temperature
+        self.temperature = temperature # nn.Parameter(torch.tensor(temperature))
         self.lr = lr
 
     def forward(self, x):
@@ -137,20 +117,24 @@ class LitContrastive(L.LightningModule):
         x_clean, x_aug = batch
         z_clean = F.normalize(self(x_clean), dim=1)
         z_aug = F.normalize(self(x_aug), dim=1)
-        
-        # Positive similarity
-        pos_sim = (z_clean * z_aug).sum(dim=1).mean()
-        self.log("val_pos_sim", pos_sim, prog_bar=True)
-        return pos_sim
 
+        alignment = (z_clean - z_aug).norm(p=2, dim=1).pow(2).mean()
+
+        z_all = torch.cat([z_clean, z_aug], dim=0)
+
+        sq_pdist = torch.pdist(z_all, p=2).pow(2)
+        uniformity = sq_pdist.mul(-2).exp().mean().log()
+
+        self.log_dict({
+            "val_alignment": alignment,
+            "val_uniformity": uniformity,
+            "val_pos_sim": F.cosine_similarity(z_clean, z_aug).mean()
+        }, prog_bar=True, sync_dist=True)
+
+        return alignment
+    
     def test_step(self, batch, batch_idx):
-        # Reuse validation logic for test evaluation
-        x_clean, x_aug = batch
-        z_clean = F.normalize(self(x_clean), dim=1)
-        z_aug = F.normalize(self(x_aug), dim=1)
-        pos_sim = (z_clean * z_aug).sum(dim=1).mean()
-        self.log("test_pos_sim", pos_sim, prog_bar=True)
-        return pos_sim
+        pass
 
     def configure_optimizers(self): # type: ignore
         optimizer = optim.AdamW(self.parameters(), lr=self.lr)
@@ -179,6 +163,7 @@ class LitContrastive(L.LightningModule):
                 "interval": "step", # Update every batch!
                 "frequency": 1
             }
+
         }
 
 class LitGenreClassifier(L.LightningModule):

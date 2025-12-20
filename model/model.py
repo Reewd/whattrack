@@ -7,6 +7,8 @@ import torch.nn.functional as F
 from torchaudio import transforms as T
 import lightning as L
 import math
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 
 class Model(nn.Module):
